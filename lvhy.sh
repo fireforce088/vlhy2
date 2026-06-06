@@ -20,6 +20,7 @@ HYSTERIA_CERT_PEM="${HYSTERIA_CERT_DIR}/cert.pem"
 
 # 用于持久存储上次配置信息的文件
 PERSISTENT_INFO_FILE="${SINGBOX_CONFIG_DIR}/.last_singbox_script_info"
+SINGBOX_INSTALLER_URL="https://sing-box.vercel.app/"
 
 # 默认值
 DEFAULT_HYSTERIA_PORT="8443"
@@ -79,7 +80,32 @@ load_persistent_info() {
         # Source 文件以加载变量。
         # 确保文件只包含安全格式的变量赋值。
         # 例如: LAST_SERVER_IP="1.2.3.4"
-        source "$PERSISTENT_INFO_FILE"
+        if head -c 1 "$PERSISTENT_INFO_FILE" | grep -q "{"; then
+            LAST_SERVER_IP=$(jq -r '.LAST_SERVER_IP // ""' "$PERSISTENT_INFO_FILE")
+            LAST_HY2_PORT=$(jq -r '.LAST_HY2_PORT // ""' "$PERSISTENT_INFO_FILE")
+            LAST_HY2_PASSWORD=$(jq -r '.LAST_HY2_PASSWORD // ""' "$PERSISTENT_INFO_FILE")
+            LAST_HY2_MASQUERADE_CN=$(jq -r '.LAST_HY2_MASQUERADE_CN // ""' "$PERSISTENT_INFO_FILE")
+            LAST_HY2_LINK=$(jq -r '.LAST_HY2_LINK // ""' "$PERSISTENT_INFO_FILE")
+            LAST_REALITY_PORT=$(jq -r '.LAST_REALITY_PORT // ""' "$PERSISTENT_INFO_FILE")
+            LAST_REALITY_UUID=$(jq -r '.LAST_REALITY_UUID // ""' "$PERSISTENT_INFO_FILE")
+            LAST_REALITY_PUBLIC_KEY=$(jq -r '.LAST_REALITY_PUBLIC_KEY // ""' "$PERSISTENT_INFO_FILE")
+            LAST_REALITY_SNI=$(jq -r '.LAST_REALITY_SNI // ""' "$PERSISTENT_INFO_FILE")
+            LAST_REALITY_SHORT_ID=$(jq -r '.LAST_REALITY_SHORT_ID // "0123456789abcdef"' "$PERSISTENT_INFO_FILE")
+            LAST_REALITY_FINGERPRINT=$(jq -r '.LAST_REALITY_FINGERPRINT // "chrome"' "$PERSISTENT_INFO_FILE")
+            LAST_VLESS_LINK=$(jq -r '.LAST_VLESS_LINK // ""' "$PERSISTENT_INFO_FILE")
+            LAST_INSTALL_MODE=$(jq -r '.LAST_INSTALL_MODE // ""' "$PERSISTENT_INFO_FILE")
+        else
+            while IFS= read -r line; do
+                [[ "$line" =~ ^(LAST_[A-Z0-9_]+)=\"([^\"]*)\"$ ]] || continue
+                key="${BASH_REMATCH[1]}"
+                value="${BASH_REMATCH[2]}"
+                case "$key" in
+                    LAST_SERVER_IP|LAST_HY2_PORT|LAST_HY2_PASSWORD|LAST_HY2_MASQUERADE_CN|LAST_HY2_LINK|LAST_REALITY_PORT|LAST_REALITY_UUID|LAST_REALITY_PUBLIC_KEY|LAST_REALITY_SNI|LAST_REALITY_SHORT_ID|LAST_REALITY_FINGERPRINT|LAST_VLESS_LINK|LAST_INSTALL_MODE)
+                        printf -v "$key" '%s' "$value"
+                        ;;
+                esac
+            done < "$PERSISTENT_INFO_FILE"
+        fi
         success "配置信息加载完成。"
     else
         info "未找到持久化的配置信息文件。"
@@ -92,21 +118,35 @@ save_persistent_info() {
     mkdir -p "$(dirname "$PERSISTENT_INFO_FILE")"
     # 将变量赋值写入文件，覆盖原有文件。
     # 重要: 确保带空格或特殊字符的值被正确引用。
-    cat > "$PERSISTENT_INFO_FILE" <<EOF
-LAST_SERVER_IP="${LAST_SERVER_IP}"
-LAST_HY2_PORT="${LAST_HY2_PORT}"
-LAST_HY2_PASSWORD="${LAST_HY2_PASSWORD}"
-LAST_HY2_MASQUERADE_CN="${LAST_HY2_MASQUERADE_CN}"
-LAST_HY2_LINK="${LAST_HY2_LINK}"
-LAST_REALITY_PORT="${LAST_REALITY_PORT}"
-LAST_REALITY_UUID="${LAST_REALITY_UUID}"
-LAST_REALITY_PUBLIC_KEY="${LAST_REALITY_PUBLIC_KEY}"
-LAST_REALITY_SNI="${LAST_REALITY_SNI}"
-LAST_REALITY_SHORT_ID="${LAST_REALITY_SHORT_ID}"
-LAST_REALITY_FINGERPRINT="${LAST_REALITY_FINGERPRINT}"
-LAST_VLESS_LINK="${LAST_VLESS_LINK}"
-LAST_INSTALL_MODE="${LAST_INSTALL_MODE}"
-EOF
+    jq -n \
+        --arg LAST_SERVER_IP "$LAST_SERVER_IP" \
+        --arg LAST_HY2_PORT "$LAST_HY2_PORT" \
+        --arg LAST_HY2_PASSWORD "$LAST_HY2_PASSWORD" \
+        --arg LAST_HY2_MASQUERADE_CN "$LAST_HY2_MASQUERADE_CN" \
+        --arg LAST_HY2_LINK "$LAST_HY2_LINK" \
+        --arg LAST_REALITY_PORT "$LAST_REALITY_PORT" \
+        --arg LAST_REALITY_UUID "$LAST_REALITY_UUID" \
+        --arg LAST_REALITY_PUBLIC_KEY "$LAST_REALITY_PUBLIC_KEY" \
+        --arg LAST_REALITY_SNI "$LAST_REALITY_SNI" \
+        --arg LAST_REALITY_SHORT_ID "$LAST_REALITY_SHORT_ID" \
+        --arg LAST_REALITY_FINGERPRINT "$LAST_REALITY_FINGERPRINT" \
+        --arg LAST_VLESS_LINK "$LAST_VLESS_LINK" \
+        --arg LAST_INSTALL_MODE "$LAST_INSTALL_MODE" \
+        '{
+            LAST_SERVER_IP: $LAST_SERVER_IP,
+            LAST_HY2_PORT: $LAST_HY2_PORT,
+            LAST_HY2_PASSWORD: $LAST_HY2_PASSWORD,
+            LAST_HY2_MASQUERADE_CN: $LAST_HY2_MASQUERADE_CN,
+            LAST_HY2_LINK: $LAST_HY2_LINK,
+            LAST_REALITY_PORT: $LAST_REALITY_PORT,
+            LAST_REALITY_UUID: $LAST_REALITY_UUID,
+            LAST_REALITY_PUBLIC_KEY: $LAST_REALITY_PUBLIC_KEY,
+            LAST_REALITY_SNI: $LAST_REALITY_SNI,
+            LAST_REALITY_SHORT_ID: $LAST_REALITY_SHORT_ID,
+            LAST_REALITY_FINGERPRINT: $LAST_REALITY_FINGERPRINT,
+            LAST_VLESS_LINK: $LAST_VLESS_LINK,
+            LAST_INSTALL_MODE: $LAST_INSTALL_MODE
+        }' > "$PERSISTENT_INFO_FILE"
     if [ $? -eq 0 ]; then
         success "配置信息保存成功。"
     else
@@ -264,7 +304,23 @@ install_singbox_core() {
     fi
     info "正在安装/更新 Sing-box (beta)..."
     # 确保官方脚本可执行
-    if bash -c "$(curl -fsSL https://sing-box.vercel.app/)" @ install --beta; then
+    local installer_tmp
+    installer_tmp=$(mktemp) || {
+        error "Failed to create a temporary installer file."
+        return 1
+    }
+    if ! curl -fsSL "$SINGBOX_INSTALLER_URL" -o "$installer_tmp"; then
+        rm -f "$installer_tmp"
+        error "Failed to download Sing-box installer."
+        return 1
+    fi
+    if ! head -n 1 "$installer_tmp" | grep -Eq '^#!.*(sh|bash)' || ! grep -q 'sing-box' "$installer_tmp"; then
+        rm -f "$installer_tmp"
+        error "Sing-box installer validation failed; execution cancelled."
+        return 1
+    fi
+    if bash "$installer_tmp" install --beta; then
+        rm -f "$installer_tmp"
         success "Sing-box 安装/更新成功。"
         find_and_set_singbox_cmd # 安装后重新查找命令
         if [ -z "$SINGBOX_CMD" ]; then
@@ -272,6 +328,7 @@ install_singbox_core() {
             return 1
         fi
     else
+        rm -f "$installer_tmp"
         error "Sing-box 安装失败。"
         return 1
     fi
